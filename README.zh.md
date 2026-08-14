@@ -71,7 +71,7 @@ dsh web
 - **派发与否由模型决定。** 没有任何机制强制模型调用 `call_agent`；强模型可能直接回答 `@name` 请求而不派发。请把 roster 的 description 写清楚，帮助模型正确路由。
 - **严格的 `{{…}}` persona 规则。** agent 正文会用作子代理的 persona，其中 `{{name}}` 是严格的 prompt 变量引用。正文含完整 `{{...}}` 组的文件会在加载时被跳过并记录原因（只有 `{{` 没有后续 `}}` 的字面文本没问题）。这与 dsh 自身的部署 persona 语义一致。
 - **frontmatter 只支持 `description`、`provider` 和 `model`。** opencode 的 `temperature`、`mode`、`tools` 字段不生效（dsh 的 subagent 请求没有 temperature 通道，工具限定是另一个独立能力）。
-- **不支持热重载。** agent 文件在插件加载时读取；改动后需重启 profile（插件的 HMR 重跑会重新读取）。
+- **支持热重载。** agents 目录会被监听：增删改 `*.md` 文件会自动重新注册 `call_agent` 工具的枚举并刷新 roster（约 200ms 防抖）——无需重启。修改已有 agent 的正文或路由，工具派发时立即用新定义。
 - **mention 边界只看名字字符。** 字面名为 `types` 的 agent 会被 `@types/react` 匹配到——请起有区分度的名字。
 
 ## 开发

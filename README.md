@@ -72,7 +72,7 @@ The plugin row accepts the usual cordis config keys (set them in your profile's 
 - **The model decides when to dispatch.** Nothing forces a `call_agent` call; a strong model may answer a `@name` request directly. Keep the roster descriptions precise so the model routes correctly.
 - **Strict `{{…}}` persona rule.** The agent body is used as the child's persona, where `{{name}}` is a strict prompt-variable reference. A file whose body contains a complete `{{...}}` group is skipped at load with a logged reason — a lone `{{` without a later `}}` is fine. This matches dsh's own deployment-persona semantics.
 - **Only `description`, `provider`, and `model` in frontmatter.** opencode's `temperature`, `mode`, and `tools` fields are not honored (dsh's subagent request has no temperature channel, and tool scoping is a separate capability).
-- **No live reload.** Agent files are read at plugin load; editing them requires restarting the profile (HMR of the plugin fiber re-reads them).
+- **Live reload.** The agents directory is watched: adding, editing, or removing an `*.md` file re-registers the `call_agent` tool's enum and refreshes the roster section automatically (debounced ~200 ms) — no restart needed. Editing the body or route of an existing agent updates the definitions the tool dispatches immediately.
 - **Mention boundary is name characters only.** `@types/react` matches an agent literally named `types` — pick distinctive names.
 
 ## Development

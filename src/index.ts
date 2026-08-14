@@ -10,6 +10,7 @@
  */
 
 import { homedir } from 'node:os'
+import { watch } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -109,14 +110,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const maxDepth = config.maxDepth ?? 3
   const rosterPath = config.rosterPath ?? DEFAULT_ROSTER_PATH
 
-  const { agents, skipped } = await loadAgentsDir(agentsDir)
+  let agents: readonly AgentDefinition[] = []
+  const applyLoad = (loaded: readonly AgentDefinition[]): void => {
+    agents = loaded
+  }
+  const { agents: initial, skipped } = await loadAgentsDir(agentsDir)
+  applyLoad(initial)
   for (const entry of skipped) {
     ctx.logger.warn(`dsh-agent-book: skipped agent file "${entry.file}": ${entry.reason}`)
-  }
-  if (agents.length === 0) {
-    ctx.logger.info(`dsh-agent-book: no agent definitions found in ${agentsDir}; the call_agent tool stays unregistered`)
-  } else {
-    ctx.logger.info(`dsh-agent-book: loaded ${agents.length} agent(s) from ${agentsDir}`)
   }
 
   ctx.systemPrompt.section({
@@ -127,8 +128,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // The model decides: it sees the roster in the system prompt and calls
   // call_agent when a request names one of the agents.
-  if (agents.length > 0) {
-    ctx.tools.register(defineTool({
+  let toolDisposer: (() => void) | undefined
+  const registerTool = (): void => {
+    toolDisposer?.()
+    toolDisposer = undefined
+    if (agents.length === 0) return
+    toolDisposer = ctx.tools.register(defineTool({
       name: 'call_agent',
       description: 'Call one of the user\'s custom agents as a subagent. The agent runs under its '
         + 'own system prompt and provider/model route, can use tools itself, and returns its reply. '
@@ -168,6 +173,39 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       },
     }))
   }
+  registerTool()
+
+  // Watch the agents directory and re-register on change: new files extend the
+  // tool's enum, edited files update the definitions the tool dispatches
+  // (execution reads the live roster), and deleted files shrink both. The
+  // roster section reads the live roster too, so no restart is needed.
+  let reloadTimer: NodeJS.Timeout | undefined
+  const reloadAgents = async (): Promise<void> => {
+    const { agents: next, skipped: reloadSkipped } = await loadAgentsDir(agentsDir)
+    for (const entry of reloadSkipped) {
+      ctx.logger.warn(`dsh-agent-book: skipped agent file "${entry.file}": ${entry.reason}`)
+    }
+    const namesChanged = next.map(agent => agent.name).join('\n') !== agents.map(agent => agent.name).join('\n')
+    applyLoad(next)
+    if (namesChanged) registerTool()
+  }
+  let watcher: ReturnType<typeof watch> | undefined
+  try {
+    watcher = watch(agentsDir, { persistent: false }, () => {
+      clearTimeout(reloadTimer)
+      reloadTimer = setTimeout(() => { void reloadAgents() }, 200)
+    })
+    // The directory can vanish under the watcher (deleted, moved, unmounted);
+    // the reload path already degrades to an empty roster.
+    watcher.on('error', () => {})
+  } catch {
+    ctx.logger.info(`dsh-agent-book: agents directory ${agentsDir} does not exist yet; no live reload (create it and restart, or edit agents after boot)`)
+  }
+  ctx.effect(() => () => {
+    clearTimeout(reloadTimer)
+    watcher?.close()
+    toolDisposer?.()
+  }, 'dsh-agent-book: agents watcher and tool')
 
   // The browser '@' source fetches the roster from this endpoint; without the
   // webserver (headless profiles) the node half simply skips the route.

@@ -13,7 +13,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apply, inject, DEFAULT_ROSTER_PATH } from '../src/index.ts'
 
 const VALID = `---
@@ -32,8 +32,12 @@ const exec = (signal: AbortSignal = new AbortController().signal): ToolRunContex
 
 interface Bench {
   ctx: Context
+  fiber: { dispose: () => Promise<void> }
   starts: SubagentStartRequest[]
+  /** The tool registered at boot (execution reads the live roster). */
   tool: { name: string; description: string; parameters: unknown; execute: (args: { agent: string; prompt: string }, execCtx: ToolRunContext) => Promise<string> }
+  /** The currently registered tool; changes when the watcher re-registers. */
+  latestTool: () => { name: string; description: string; parameters: unknown; execute: (args: { agent: string; prompt: string }, execCtx: ToolRunContext) => Promise<string> }
   sections: { name: string; order: number; text: () => string }[]
   routes: { kind: string; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }[]
   dir: string
@@ -50,6 +54,7 @@ async function bench(config: Record<string, unknown> = {}): Promise<Bench> {
   let tool: Bench['tool']
   ctx.provide('tools', {
     register: (registered: Bench['tool']) => {
+
       tool = registered
       return () => {}
     },
@@ -77,14 +82,15 @@ async function bench(config: Record<string, unknown> = {}): Promise<Bench> {
       return () => {}
     },
   })
-  await ctx.plugin({ inject: [...inject], apply }, {
+  const fiber = ctx.plugin({ inject: [...inject], apply }, {
     agentsDir: dir,
     provider: 'spawn',
     maxDepth: 3,
     rosterPath: DEFAULT_ROSTER_PATH,
     ...config,
   })
-  return { ctx, starts, sections, routes, dir, tool: tool! }
+  await fiber.await()
+  return { ctx, fiber, starts, sections, routes, dir, tool: tool!, latestTool: () => tool! }
 }
 
 describe('apply', () => {
@@ -92,7 +98,13 @@ describe('apply', () => {
 
   beforeEach(() => { current = undefined })
   afterEach(async () => {
-    if (current !== undefined) await rm(current.dir, { recursive: true, force: true })
+    if (current !== undefined) {
+      // Dispose the fiber first so the directory watcher closes before the
+      // temp dir is removed (an rm-triggered reload would be harmless, but
+      // ordering keeps the watcher quiet).
+      await current.fiber!.dispose()
+      await rm(current.dir, { recursive: true, force: true })
+    }
   })
 
   it('declares the services it binds', () => {
@@ -217,9 +229,45 @@ describe('apply', () => {
       },
     })
     ctx.provide('systemPrompt', { section: () => () => {} })
-    await ctx.plugin({ inject: [...inject], apply }, { agentsDir: dir })
+    const fiber = ctx.plugin({ inject: [...inject], apply }, { agentsDir: dir })
+    await fiber.await()
+    await fiber.dispose()
     await rm(dir, { recursive: true, force: true })
     expect(registered).toBe(0)
     expect(ctx.get('webServer')).toBeUndefined()
+  })
+
+  it('live-reloads a new agent file into the tool enum', async () => {
+    const b = await bench()
+    current = b
+    const enumOf = (): string[] =>
+      (b.latestTool().parameters as { properties: { agent: { enum: string[] } } }).properties.agent.enum
+    expect(enumOf()).toEqual(['reviewer'])
+    await writeFile(join(b.dir, 'writer.md'), '---\ndescription: Writes prose\n---\nYou write.\n')
+    await vi.waitFor(() => {
+      expect(enumOf()).toEqual(['reviewer', 'writer'])
+    }, { timeout: 5000 })
+  })
+
+  it('live-reloads edited definitions into the roster section and dispatch', async () => {
+    const b = await bench()
+    current = b
+    const section = b.sections.find(entry => entry.name === 'agent-book:roster')!
+    expect(section.text()).toContain('Reviews code for bugs')
+    await writeFile(join(b.dir, 'reviewer.md'), `---
+description: Reviews code AND security
+provider: google
+model: gemini-3-flash-preview
+---
+You are a senior code and security reviewer.
+`)
+    await vi.waitFor(() => {
+      expect(section.text()).toContain('Reviews code AND security')
+    }, { timeout: 5000 })
+    // The enum is unchanged, so the tool is not re-registered; execution
+    // reads the live roster and picks up the new persona.
+    const result = await b.tool.execute({ agent: 'reviewer', prompt: '检查' }, exec())
+    expect(b.starts[0]?.persona).toBe('You are a senior code and security reviewer.')
+    expect(result).toContain('代码没问题。')
   })
 })
