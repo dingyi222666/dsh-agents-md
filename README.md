@@ -25,17 +25,15 @@ security issues. Explain each finding and suggest a fix.
 Then type `@reviewer <your request>` in any conversation:
 
 - The `@` menu (same trigger the built-in subagent reference uses) lists your agents with their descriptions — pick one and the mention lands in the draft as `@name `.
-- When the message is sent, the harness routes the request deterministically: the rest of the message becomes the task, the agent's body becomes the child's system prompt, and the frontmatter `provider`/`model` (when present) become the child's route. The child runs on the subagent provider (`spawn` by default) with the parent's tool set, so it can call tools itself to do the work; you can watch it in the subagent catalog while it runs.
-- The agent's reply is appended to the step as a context notice (`@reviewer returned`), so the main model sees the result and continues.
+- The main model reads the roster from its system prompt and, when a request names one of the agents, calls the `call_agent` tool itself with the agent's name and the task. The tool runs the agent as a subagent on the subagent provider (`spawn` by default): the agent's body becomes the child's system prompt, the frontmatter `provider`/`model` become the child's route, and the child inherits the parent's tool set — so the agent can call tools itself to do the work. You can watch it in the subagent catalog while it runs.
+- The tool returns the agent's reply to the main model, which continues with it.
 
 ```sh
 # In chat
 @reviewer 检查这段代码有没有 bug
 
-# The main agent then sees, in context:
-#   The user's @reviewer mention was dispatched to the "reviewer" agent
-#   (google/gemini-3-flash-preview). The agent's reply:
-#   ...
+# The main model calls call_agent(agent: "reviewer", prompt: "检查这段代码有没有 bug")
+# and receives the agent's reply from the tool result.
 ```
 
 ## Install
@@ -65,13 +63,13 @@ The plugin row accepts the usual cordis config keys (set them in your profile's 
 
 ## Model Experience
 
-- **Added prompt content**: one system-prompt section (order 95) listing the loaded agents (`@name — description (model: …)`), plus, per dispatched mention, one user-role context notice carrying the agent's reply. Empty roster → the section renders nothing.
-- **Added tools**: none — dispatch is deterministic in the pre-step, so the model never has to decide whether to delegate.
-- **Token costs**: the roster section is proportional to the number of agents; each dispatch costs the child's own turn and one context notice.
+- **Added prompt content**: one system-prompt section (order 95) listing the loaded agents (`@name — description (route)`), telling the model to call `call_agent` when a request names one. Empty roster → the section renders nothing.
+- **Added tools**: `call_agent` (registered only when at least one agent is loaded) — `agent` (enum of the roster) + `prompt`. The model decides when to dispatch.
+- **Token costs**: the roster section is proportional to the number of agents; each dispatch costs the child's own turn.
 
 ## What's missing
 
-- **First mention wins.** A message naming several agents dispatches only the first (longest-name-first) match; the rest of the message still goes to it as the task. Pick one agent per message for now.
+- **The model decides when to dispatch.** Nothing forces a `call_agent` call; a strong model may answer a `@name` request directly. Keep the roster descriptions precise so the model routes correctly.
 - **Strict `{{…}}` persona rule.** The agent body is used as the child's persona, where `{{name}}` is a strict prompt-variable reference. A file whose body contains a complete `{{...}}` group is skipped at load with a logged reason — a lone `{{` without a later `}}` is fine. This matches dsh's own deployment-persona semantics.
 - **Only `description`, `provider`, and `model` in frontmatter.** opencode's `temperature`, `mode`, and `tools` fields are not honored (dsh's subagent request has no temperature channel, and tool scoping is a separate capability).
 - **No live reload.** Agent files are read at plugin load; editing them requires restarting the profile (HMR of the plugin fiber re-reads them).

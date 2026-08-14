@@ -24,17 +24,15 @@ model: gemini-3-flash-preview
 然后在任意会话里输入 `@reviewer <你的请求>`：
 
 - `@` 菜单（和内置 subagent 引用共用一个触发键）列出你的 agent 和描述——选中后以 `@名字 ` 落进输入框。
-- 消息发出后由 harness 确定性路由：消息其余部分作为任务，agent 正文作为子代理的 system prompt，frontmatter 里的 `provider`/`model`（如有）作为子代理的路由。子代理跑在 subagent provider 上（默认 `spawn`），继承父代理的工具集——`@` 只是注入提示词，具体干活由子代理模型自己调工具完成；运行期间可以在 subagent 目录里看到它。
-- agent 的回复以一条上下文通知（`@reviewer returned`）追加到这一步，主模型看到结果后继续。
+- 主模型从系统提示词里读到 roster，当请求提到某个 agent 时，**由主模型自己调用 `call_agent` 工具**（传 agent 名和任务）。工具把该 agent 作为子代理跑在 subagent provider 上（默认 `spawn`）：agent 正文作为子代理的 system prompt，frontmatter 里的 `provider`/`model` 作为子代理的路由，子代理继承父代理的工具集——agent 自己调工具干活。运行期间可以在 subagent 目录里看到它。
+- 工具把 agent 的回复返回给主模型，主模型据此继续。
 
 ```sh
 # 对话中输入
 @reviewer 检查这段代码有没有 bug
 
-# 主模型随后在上下文中看到：
-#   The user's @reviewer mention was dispatched to the "reviewer" agent
-#   (google/gemini-3-flash-preview). The agent's reply:
-#   ...
+# 主模型调用 call_agent(agent: "reviewer", prompt: "检查这段代码有没有 bug")
+# 并从工具结果收到 agent 的回复。
 ```
 
 ## 安装
@@ -64,13 +62,13 @@ dsh web
 
 ## 模型体验
 
-- **新增 prompt 内容**：一条 system-prompt section（顺序 95），列出已加载的 agent（`@name — description (model: …)`）；每次派发再加一条携带 agent 回复的 user 角色上下文通知。roster 为空时该 section 不渲染任何内容。
-- **新增工具**：无——派发在 pre-step 里确定性完成，模型不需要决定是否委派。
-- **Token 开销**：roster section 与 agent 数量成正比；每次派发消耗子代理自己的一轮和一条上下文通知。
+- **新增 prompt 内容**：一条 system-prompt section（顺序 95），列出已加载的 agent（`@name — description (路由)`），提示模型在请求提到某个 agent 时调用 `call_agent`。roster 为空时该 section 不渲染任何内容。
+- **新增工具**：`call_agent`（仅在至少加载了一个 agent 时注册）——`agent`（roster 枚举）+ `prompt`。是否派发由模型决定。
+- **Token 开销**：roster section 与 agent 数量成正比；每次派发消耗子代理自己的一轮。
 
 ## 已知限制
 
-- **第一个 mention 生效。** 一条消息里提到多个 agent 时只派发第一个（按名字从长到短匹配），其余文本仍作为它的任务。目前请一条消息只叫一个 agent。
+- **派发与否由模型决定。** 没有任何机制强制模型调用 `call_agent`；强模型可能直接回答 `@name` 请求而不派发。请把 roster 的 description 写清楚，帮助模型正确路由。
 - **严格的 `{{…}}` persona 规则。** agent 正文会用作子代理的 persona，其中 `{{name}}` 是严格的 prompt 变量引用。正文含完整 `{{...}}` 组的文件会在加载时被跳过并记录原因（只有 `{{` 没有后续 `}}` 的字面文本没问题）。这与 dsh 自身的部署 persona 语义一致。
 - **frontmatter 只支持 `description`、`provider` 和 `model`。** opencode 的 `temperature`、`mode`、`tools` 字段不生效（dsh 的 subagent 请求没有 temperature 通道，工具限定是另一个独立能力）。
 - **不支持热重载。** agent 文件在插件加载时读取；改动后需重启 profile（插件的 HMR 重跑会重新读取）。

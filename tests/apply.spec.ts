@@ -1,17 +1,16 @@
 /**
  * The plugin's real composition path: apply() over a temp agents directory with
- * fake subagents / systemPrompt / webServer faces, driving the pre-step
- * waterfall exactly as the loop does. Covers the @mention dispatch, the
- * user-source-only guard, the roster section, and the roster route.
+ * fake tools / subagents / systemPrompt / webServer faces. Covers the
+ * call_agent tool registration and execution (persona, provider/model route,
+ * mention stripping, failure mapping), the roster section, and the roster
+ * route.
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { agentEvents } from '@deepseek-ai/dsh-agent'
-import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -19,33 +18,22 @@ import { apply, inject, DEFAULT_ROSTER_PATH } from '../src/index.ts'
 
 const VALID = `---
 description: Reviews code for bugs
-model: deepseek-chat
+provider: google
+model: gemini-3-flash-preview
 ---
 You are a senior code reviewer.
 `
 
-/** A minimal agent subject for agentEvents (object-keyed scope; never dereferenced deeply). */
+/** A minimal agent subject for exec.agent (never dereferenced deeply). */
 const subject = { id: 'agent-1' } as unknown as Agent
 
-const userMessage = (text: string): UserMessage => createUserMessage({
-  content: [{ type: 'text', text }],
-  source: { kind: 'user' },
-})
-
-const pluginMessage = (text: string): UserMessage => createUserMessage({
-  content: [{ type: 'text', text }],
-  source: { kind: 'plugin', plugin: 'other-plugin' },
-})
-
-/** Narrow an enter decision; rejects the test when the decision is a reject. */
-function enter(decision: PreStepDecision): Extract<PreStepDecision, { kind: 'enter' }> {
-  if (decision.kind !== 'enter') throw new Error(`expected an enter decision, got ${decision.kind}`)
-  return decision
-}
+const exec = (signal: AbortSignal = new AbortController().signal): ToolRunContext =>
+  ({ agent: subject, signal } as unknown as ToolRunContext)
 
 interface Bench {
   ctx: Context
   starts: SubagentStartRequest[]
+  tool: { name: string; description: string; parameters: unknown; execute: (args: { agent: string; prompt: string }, execCtx: ToolRunContext) => Promise<string> }
   sections: { name: string; order: number; text: () => string }[]
   routes: { kind: string; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }[]
   dir: string
@@ -59,6 +47,13 @@ async function bench(config: Record<string, unknown> = {}): Promise<Bench> {
   const starts: SubagentStartRequest[] = []
   const sections: Bench['sections'] = []
   const routes: Bench['routes'] = []
+  let tool: Bench['tool']
+  ctx.provide('tools', {
+    register: (registered: Bench['tool']) => {
+      tool = registered
+      return () => {}
+    },
+  })
   ctx.provide('subagents', {
     start: async (_provider: string, request: SubagentStartRequest) => {
       starts.push(request)
@@ -89,22 +84,8 @@ async function bench(config: Record<string, unknown> = {}): Promise<Bench> {
     rosterPath: DEFAULT_ROSTER_PATH,
     ...config,
   })
-  return { ctx, starts, sections, routes, dir }
+  return { ctx, starts, sections, routes, dir, tool: tool! }
 }
-
-async function fire(ctx: Context, messages: UserMessage[], signal: AbortSignal = new AbortController().signal): Promise<PreStepDecision> {
-  return agentEvents(ctx, subject).waterfall(
-    'agent/pre-step',
-    { messages, turn: 1, step: 1, signal },
-    () => Promise.resolve({ kind: 'enter', messages }),
-  )
-}
-
-const texts = (decision: PreStepDecision): string[] =>
-  decision.kind === 'enter'
-    ? decision.messages.map(message =>
-      message.content.filter(block => block.type === 'text').map(block => block.text).join(''))
-    : []
 
 describe('apply', () => {
   let current: Bench | undefined
@@ -115,79 +96,97 @@ describe('apply', () => {
   })
 
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['subagents', 'systemPrompt'])
+    expect(inject).toEqual(['tools', 'subagents', 'systemPrompt'])
   })
 
-  it('dispatches a @mention in a user message to the agent and appends the result notice', async () => {
+  it('registers the call_agent tool with an enum of the loaded agents', async () => {
     const b = await bench()
     current = b
-    const message = userMessage('@reviewer 检查这段代码')
-    const decision = enter(await fire(b.ctx, [message]))
+    expect(b.tool.name).toBe('call_agent')
+    const parameters = b.tool.parameters as {
+      type: string
+      required: string[]
+      properties: {
+        agent: { type: string; enum: string[] }
+        prompt: { type: string }
+      }
+    }
+    expect(parameters.properties.agent).toMatchObject({
+      type: 'string',
+      enum: ['reviewer'],
+    })
+    expect(parameters.properties.prompt).toMatchObject({ type: 'string' })
+    expect(parameters.required).toEqual(['agent', 'prompt'])
+  })
 
+  it('runs the named agent with its persona, route, and a mention-stripped task', async () => {
+    const b = await bench()
+    current = b
+    const result = await b.tool.execute({ agent: 'reviewer', prompt: '@reviewer 检查这段代码' }, exec())
     expect(b.starts).toHaveLength(1)
     expect(b.starts[0]).toMatchObject({
       label: '@reviewer',
       persona: 'You are a senior code reviewer.',
-      agentOptions: { model: 'deepseek-chat' },
+      agentOptions: { provider: 'google', model: 'gemini-3-flash-preview' },
       maxDepth: 3,
     })
     expect(b.starts[0].prompt).toEqual([{ type: 'text', text: '检查这段代码' }])
     expect(b.starts[0].parent).toBe(subject)
+    expect(result).toContain('代码没问题。')
+    expect(result).toContain('google/gemini-3-flash-preview')
+  })
 
-    expect(decision.messages).toHaveLength(2)
-    expect(decision.messages[0]).toBe(message)
-    const notice = decision.messages[1]
-    expect(notice.source).toMatchObject({
-      kind: 'plugin', plugin: 'dsh-agent-book', form: 'notice', summary: '@reviewer returned',
+  it('uses the agent description as the task when the prompt is only the mention', async () => {
+    const b = await bench()
+    current = b
+    await b.tool.execute({ agent: 'reviewer', prompt: '@reviewer' }, exec())
+    expect(b.starts[0]?.prompt).toEqual([{ type: 'text', text: 'Reviews code for bugs' }])
+  })
+
+  it('rejects an unknown agent name through the enum argument validation', async () => {
+    const b = await bench()
+    current = b
+    await expect(b.tool.execute({ agent: 'ghost', prompt: 'x' }, exec()))
+      .rejects.toThrow(/must be one of/)
+    expect(b.starts).toHaveLength(0)
+  })
+
+  it('throws without a calling agent', async () => {
+    const b = await bench()
+    current = b
+    await expect(b.tool.execute({ agent: 'reviewer', prompt: 'x' }, { signal: new AbortController().signal } as unknown as ToolRunContext))
+      .rejects.toThrow(/calling agent/)
+  })
+
+  it('maps a failed child run to a tool error carrying the partial output', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-book-fail-'))
+    await writeFile(join(dir, 'reviewer.md'), VALID)
+    const ctx = new Context()
+    let tool: Bench['tool']
+    ctx.provide('tools', { register: (registered: Bench['tool']) => { tool = registered; return () => {} } })
+    ctx.provide('subagents', {
+      start: async (_provider: string, _request: SubagentStartRequest) => ({
+        id: 'child-1' as never,
+        localAgent: undefined,
+        result: Promise.resolve({ output: [{ type: 'text', text: '看到一半……' }], stopReason: 'max-tokens' }),
+        dispose: async () => {},
+      }),
     })
-    expect(texts(decision)[1]).toContain('代码没问题。')
+    ctx.provide('systemPrompt', { section: () => () => {} })
+    await ctx.plugin({ inject: [...inject], apply }, { agentsDir: dir })
+    await rm(dir, { recursive: true, force: true })
+    await expect(tool!.execute({ agent: 'reviewer', prompt: 'x' }, exec()))
+      .rejects.toThrow(/hit its token limit/)
   })
 
-  it('passes the parent turn signal to the child', async () => {
-    const b = await bench()
-    current = b
-    const signal = new AbortController().signal
-    await fire(b.ctx, [userMessage('@reviewer 检查')], signal)
-    expect(b.starts[0]?.signal).toBe(signal)
-  })
-
-  it('leaves messages without a mention untouched', async () => {
-    const b = await bench()
-    current = b
-    const message = userMessage('普通消息')
-    const decision = await fire(b.ctx, [message])
-    expect(b.starts).toHaveLength(0)
-    expect(enter(decision).messages).toEqual([message])
-  })
-
-  it('never dispatches on plugin-source messages, even with a mention', async () => {
-    const b = await bench()
-    current = b
-    const decision = await fire(b.ctx, [pluginMessage('@reviewer 检查')])
-    expect(b.starts).toHaveLength(0)
-    expect(enter(decision).messages).toHaveLength(1)
-  })
-
-  it('delegates a rejected step without dispatching', async () => {
-    const b = await bench()
-    current = b
-    const message = userMessage('@reviewer 检查')
-    const decision = await agentEvents(b.ctx, subject).waterfall(
-      'agent/pre-step',
-      { messages: [message], turn: 1, step: 1, signal: new AbortController().signal },
-      () => Promise.resolve({ kind: 'reject' }),
-    )
-    expect(b.starts).toHaveLength(0)
-    expect(decision).toEqual({ kind: 'reject' })
-  })
-
-  it('registers a roster section that lists the loaded agents', async () => {
+  it('registers a roster section that lists the loaded agents with their route', async () => {
     const b = await bench()
     current = b
     const section = b.sections.find(entry => entry.name === 'agent-book:roster')
     expect(section).toBeDefined()
     expect(section!.order).toBe(95)
-    expect(section!.text()).toContain('@reviewer — Reviews code for bugs (model: deepseek-chat)')
+    expect(section!.text()).toContain('@reviewer — Reviews code for bugs (google/gemini-3-flash-preview)')
+    expect(section!.text()).toContain('call_agent')
   })
 
   it('registers the roster route on the webserver and serves the agent list as JSON', async () => {
@@ -203,14 +202,15 @@ describe('apply', () => {
     } as unknown as ServerResponse
     await route!.handler({ method: 'GET' } as IncomingMessage, res)
     expect(JSON.parse(body)).toEqual([
-      { name: 'reviewer', description: 'Reviews code for bugs', model: 'deepseek-chat' },
+      { name: 'reviewer', description: 'Reviews code for bugs', provider: 'google', model: 'gemini-3-flash-preview' },
     ])
   })
 
-  it('still boots without a webserver, serving no roster route', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'agent-book-noroute-'))
-    await writeFile(join(dir, 'reviewer.md'), VALID)
+  it('registers no tool and an empty roster section without agents, and still boots without a webserver', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-book-empty-'))
     const ctx = new Context()
+    let registered = 0
+    ctx.provide('tools', { register: () => { registered += 1; return () => {} } })
     ctx.provide('subagents', {
       start: async (_provider: string, _request: SubagentStartRequest) => {
         throw new Error('unexpected start')
@@ -219,6 +219,7 @@ describe('apply', () => {
     ctx.provide('systemPrompt', { section: () => () => {} })
     await ctx.plugin({ inject: [...inject], apply }, { agentsDir: dir })
     await rm(dir, { recursive: true, force: true })
+    expect(registered).toBe(0)
     expect(ctx.get('webServer')).toBeUndefined()
   })
 })
