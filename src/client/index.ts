@@ -38,6 +38,7 @@ export const ROSTER_PATH = '/dsh-agent-book/agents.json'
 export interface AgentSummary {
   readonly name: string
   readonly description?: string
+  readonly provider?: string
   readonly model?: string
 }
 

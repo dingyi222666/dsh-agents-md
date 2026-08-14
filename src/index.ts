@@ -19,7 +19,7 @@ import { assertSubagentMaxDepth } from '@deepseek-ai/dsh-subagent'
 // Type-only: pulls the system-prompt service's cordis Context merge (ctx.systemPrompt).
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import z from '@deepseek-ai/schemastery'
-import { loadAgentsDir } from './agents.ts'
+import { loadAgentsDir, routePart } from './agents.ts'
 import type { AgentDefinition } from './agents.ts'
 import { dispatchMention } from './dispatch.ts'
 import { findMention } from './mention.ts'
@@ -60,8 +60,7 @@ const ROSTER_SECTION_ORDER = 95
 /** Model-facing roster statement: what `@mention`s do and who is available. */
 export function rosterSectionText(agents: readonly AgentDefinition[]): string {
   if (agents.length === 0) return ''
-  const lines = agents.map(agent =>
-    `- @${agent.name} — ${agent.description}${agent.model !== undefined ? ` (model: ${agent.model})` : ''}`)
+  const lines = agents.map(agent => `- @${agent.name} — ${agent.description}${routePart(agent)}`)
   return 'The user can dispatch work to named custom agents by writing @<name> in a message. '
     + 'The harness routes the rest of the message to that agent automatically and appends the '
     + 'agent\'s reply as context; you do not need to delegate for them. Available agents:\n'
@@ -72,6 +71,7 @@ export function rosterSectionText(agents: readonly AgentDefinition[]): string {
 export interface RosterEntry {
   readonly name: string
   readonly description: string
+  readonly provider?: string
   readonly model?: string
 }
 
@@ -80,6 +80,7 @@ function toRosterEntry(agent: AgentDefinition): RosterEntry {
   return {
     name: agent.name,
     description: agent.description,
+    ...agent.provider !== undefined ? { provider: agent.provider } : {},
     ...agent.model !== undefined ? { model: agent.model } : {},
   }
 }

@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SubagentResult, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
+import { routePart } from './agents.ts'
 import type { AgentMention } from './mention.ts'
 
 /** Where the dispatched child should run. */
@@ -75,14 +76,21 @@ export async function dispatchMention(
   options: DispatchOptions,
 ): Promise<DispatchOutcome> {
   const { agent } = mention
-  const modelPart = agent.model !== undefined ? ` (model ${agent.model})` : ''
+  const modelPart = routePart(agent)
   try {
     const run = await ctx.subagents.start(options.provider, {
       label: `@${agent.name}`,
       prompt: [{ type: 'text', text: mention.task }] as ContentBlock[],
       parent,
       signal,
-      ...agent.model !== undefined ? { agentOptions: { model: agent.model } } : {},
+      ...agent.provider !== undefined || agent.model !== undefined
+        ? {
+          agentOptions: {
+            ...agent.provider !== undefined ? { provider: agent.provider } : {},
+            ...agent.model !== undefined ? { model: agent.model } : {},
+          },
+        }
+        : {},
       persona: agent.systemPrompt,
       ...options.maxDepth !== undefined ? { maxDepth: options.maxDepth } : {},
     })

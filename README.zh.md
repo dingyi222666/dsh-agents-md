@@ -8,20 +8,23 @@
 
 ## 工作原理
 
-在 agents 目录（默认 `~/.dsh/agents/`）里每个 agent 放一个文件。文件名就是 mention 名字；YAML frontmatter 放 `description`（显示在 `@` 菜单和模型视角里）和可选的 `model`；正文就是这个 agent 的 system prompt。
+在 agents 目录（默认 `~/.dsh/agents/`）里每个 agent 放一个文件。文件名就是 mention 名字；YAML frontmatter 放 `description`（显示在 `@` 菜单和模型视角里）、可选的 `provider` 和可选的 `model`；正文就是这个 agent 的 system prompt。
 
 ```md
 ---
 description: 检查代码 bug 和边界情况
-model: deepseek-chat
+provider: google
+model: gemini-3-flash-preview
 ---
 你是一位资深代码评审员。检查正确性、边界情况和安全问题，逐条说明问题并给出修改建议。
 ```
 
+`provider` 和 `model` 就是 dsh 自己的模型路由用的名字——即 Models 页面（或 `settings.yaml` 里的 `llm-*` 配置）里配置的那套。两个都省略则继承父代理的路由。路由缺失或不存在会导致子代理第一次请求失败，所以请用你配置的 provider 实际支持的 id。
+
 然后在任意会话里输入 `@reviewer <你的请求>`：
 
 - `@` 菜单（和内置 subagent 引用共用一个触发键）列出你的 agent 和描述——选中后以 `@名字 ` 落进输入框。
-- 消息发出后由 harness 确定性路由：消息其余部分作为任务，agent 正文作为子代理的 system prompt，frontmatter 里的 `model`（如有）作为子代理的模型。子代理跑在 subagent provider 上（默认 `spawn`），运行期间可以在 subagent 目录里看到它。
+- 消息发出后由 harness 确定性路由：消息其余部分作为任务，agent 正文作为子代理的 system prompt，frontmatter 里的 `provider`/`model`（如有）作为子代理的路由。子代理跑在 subagent provider 上（默认 `spawn`），继承父代理的工具集——`@` 只是注入提示词，具体干活由子代理模型自己调工具完成；运行期间可以在 subagent 目录里看到它。
 - agent 的回复以一条上下文通知（`@reviewer returned`）追加到这一步，主模型看到结果后继续。
 
 ```sh
@@ -30,7 +33,7 @@ model: deepseek-chat
 
 # 主模型随后在上下文中看到：
 #   The user's @reviewer mention was dispatched to the "reviewer" agent
-#   (model deepseek-chat). The agent's reply:
+#   (google/gemini-3-flash-preview). The agent's reply:
 #   ...
 ```
 
@@ -69,7 +72,7 @@ dsh web
 
 - **第一个 mention 生效。** 一条消息里提到多个 agent 时只派发第一个（按名字从长到短匹配），其余文本仍作为它的任务。目前请一条消息只叫一个 agent。
 - **严格的 `{{…}}` persona 规则。** agent 正文会用作子代理的 persona，其中 `{{name}}` 是严格的 prompt 变量引用。正文含完整 `{{...}}` 组的文件会在加载时被跳过并记录原因（只有 `{{` 没有后续 `}}` 的字面文本没问题）。这与 dsh 自身的部署 persona 语义一致。
-- **frontmatter 只支持 `description` 和 `model`。** opencode 的 `temperature`、`mode`、`tools` 字段不生效（dsh 的 subagent 请求没有 temperature 通道，工具限定是另一个独立能力）。
+- **frontmatter 只支持 `description`、`provider` 和 `model`。** opencode 的 `temperature`、`mode`、`tools` 字段不生效（dsh 的 subagent 请求没有 temperature 通道，工具限定是另一个独立能力）。
 - **不支持热重载。** agent 文件在插件加载时读取；改动后需重启 profile（插件的 HMR 重跑会重新读取）。
 - **mention 边界只看名字字符。** 字面名为 `types` 的 agent 会被 `@types/react` 匹配到——请起有区分度的名字。
 

@@ -17,6 +17,8 @@ export interface AgentDefinition {
   readonly name: string
   /** One-line role description shown in the '@' menu and to the model. */
   readonly description: string
+  /** Optional provider route; inherits the parent agent's provider when absent. */
+  readonly provider?: string
   /** Optional model id routed to the provider adapter; inherits the parent agent's model when absent. */
   readonly model?: string
   /** The agent's system prompt (the dispatched child's persona). */
@@ -49,6 +51,19 @@ export interface AgentFileInput {
 
 /** Valid mention names: ASCII word characters plus `-`, no spaces or CJK. */
 const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/
+
+/**
+ * Render an agent's provider/model route for model-facing text:
+ * `(provider/model)`, `(model: X)`, `(provider: P)`, or empty.
+ * @param agent - the agent (or any object carrying the optional fields).
+ * @returns the parenthesized route text, or '' when neither field is set.
+ */
+export function routePart(agent: { readonly provider?: string; readonly model?: string }): string {
+  if (agent.provider !== undefined && agent.model !== undefined) return ` (${agent.provider}/${agent.model})`
+  if (agent.model !== undefined) return ` (model: ${agent.model})`
+  if (agent.provider !== undefined) return ` (provider: ${agent.provider})`
+  return ''
+}
 
 /** The frontmatter fence: `---`, the YAML block, a closing `---`, then the body. */
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/
@@ -105,6 +120,10 @@ export function parseAgentFile(name: string, text: string): AgentDefinition {
   if (model !== undefined && (typeof model !== 'string' || model.trim().length === 0)) {
     throw new Error('frontmatter `model`, when present, must be a non-empty string')
   }
+  const provider = fields.provider
+  if (provider !== undefined && (typeof provider !== 'string' || provider.trim().length === 0)) {
+    throw new Error('frontmatter `provider`, when present, must be a non-empty string')
+  }
   if (body.trim().length === 0) {
     throw new Error('the agent body (its system prompt) must not be empty')
   }
@@ -119,6 +138,7 @@ export function parseAgentFile(name: string, text: string): AgentDefinition {
   return {
     name,
     description: description.trim(),
+    ...provider !== undefined ? { provider: provider.trim() } : {},
     ...model !== undefined ? { model: model.trim() } : {},
     systemPrompt,
   }

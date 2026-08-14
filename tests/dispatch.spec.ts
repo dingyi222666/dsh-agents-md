@@ -67,10 +67,10 @@ describe('dispatchMention', () => {
     expect(outcome.summary).toBe('@reviewer returned')
     expect(outcome.text).toContain('The agent\'s reply:')
     expect(outcome.text).toContain('代码没问题。')
-    expect(outcome.text).toContain('model deepseek-chat')
+    expect(outcome.text).toContain('model: deepseek-chat')
   })
 
-  it('omits agentOptions when the agent defines no model', async () => {
+  it('routes provider and model together when both are set', async () => {
     const ctx = new Context()
     let request: SubagentStartRequest | undefined
     ctx.provide('subagents', {
@@ -79,7 +79,26 @@ describe('dispatchMention', () => {
         return fakeRun({ output: textBlocks('ok'), stopReason: 'completed' })
       },
     })
-    await dispatchMention(ctx, { agent: { ...reviewer, model: undefined }, task: 'x' }, parent, new AbortController().signal, { provider: 'spawn' })
+    await dispatchMention(
+      ctx,
+      { agent: { ...reviewer, provider: 'google', model: 'gemini-3-flash-preview' }, task: 'x' },
+      parent,
+      new AbortController().signal,
+      { provider: 'spawn' },
+    )
+    expect(request?.agentOptions).toEqual({ provider: 'google', model: 'gemini-3-flash-preview' })
+  })
+
+  it('omits agentOptions when the agent defines neither provider nor model', async () => {
+    const ctx = new Context()
+    let request: SubagentStartRequest | undefined
+    ctx.provide('subagents', {
+      start: async (_provider: string, req: SubagentStartRequest) => {
+        request = req
+        return fakeRun({ output: textBlocks('ok'), stopReason: 'completed' })
+      },
+    })
+    await dispatchMention(ctx, { agent: { ...reviewer, provider: undefined, model: undefined }, task: 'x' }, parent, new AbortController().signal, { provider: 'spawn' })
     expect(request?.agentOptions).toBeUndefined()
   })
 

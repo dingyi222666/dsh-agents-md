@@ -47,6 +47,27 @@ describe('parseAgentFile', () => {
     })
   })
 
+  it('parses a provider route alongside the model', () => {
+    const agent = parseAgentFile('frontend-review', `---
+description: Reviews frontend code
+provider: google
+model: gemini-3-flash-preview
+---
+Review UI only.
+`)
+    expect(agent).toEqual({
+      name: 'frontend-review',
+      description: 'Reviews frontend code',
+      provider: 'google',
+      model: 'gemini-3-flash-preview',
+      systemPrompt: 'Review UI only.',
+    })
+  })
+
+  it('rejects an empty provider value', () => {
+    expect(() => parseAgentFile('reviewer', '---\ndescription: Hi\nprovider: "  "\n---\nBody.')).toThrow(/non-empty string/)
+  })
+
   it('rejects a name that cannot be mentioned', () => {
     expect(() => parseAgentFile('中文名', VALID)).toThrow(/not usable as a mention/)
     expect(() => parseAgentFile('has space', VALID)).toThrow(/not usable as a mention/)

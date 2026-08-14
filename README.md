@@ -8,21 +8,24 @@ A plugin for dsh that brings opencode-style custom agents to your conversations.
 
 ## How it works
 
-Drop one file per agent into the agents directory (default `~/.dsh/agents/`). The file name becomes the mention name; the YAML frontmatter carries the `description` (shown in the `@` menu and to the model) and an optional `model`; the body is the agent's system prompt.
+Drop one file per agent into the agents directory (default `~/.dsh/agents/`). The file name becomes the mention name; the YAML frontmatter carries the `description` (shown in the `@` menu and to the model), an optional `provider`, and an optional `model`; the body is the agent's system prompt.
 
 ```md
 ---
 description: Reviews code for bugs and edge cases
-model: deepseek-chat
+provider: google
+model: gemini-3-flash-preview
 ---
 You are a senior code reviewer. Check for correctness, edge cases, and
 security issues. Explain each finding and suggest a fix.
 ```
 
+`provider` and `model` are the names dsh's own model routing uses — the ones your Models page (or a `settings.yaml` `llm-*` section) configures. Omit both to inherit the parent agent's route. A missing or unknown route fails the child's first request, so use ids your configured providers actually advertise.
+
 Then type `@reviewer <your request>` in any conversation:
 
 - The `@` menu (same trigger the built-in subagent reference uses) lists your agents with their descriptions — pick one and the mention lands in the draft as `@name `.
-- When the message is sent, the harness routes the request deterministically: the rest of the message becomes the task, the agent's body becomes the child's system prompt, and the frontmatter `model` (when present) becomes the child's model. The child runs on the subagent provider (`spawn` by default), so you can see it in the subagent catalog while it works.
+- When the message is sent, the harness routes the request deterministically: the rest of the message becomes the task, the agent's body becomes the child's system prompt, and the frontmatter `provider`/`model` (when present) become the child's route. The child runs on the subagent provider (`spawn` by default) with the parent's tool set, so it can call tools itself to do the work; you can watch it in the subagent catalog while it runs.
 - The agent's reply is appended to the step as a context notice (`@reviewer returned`), so the main model sees the result and continues.
 
 ```sh
@@ -31,7 +34,7 @@ Then type `@reviewer <your request>` in any conversation:
 
 # The main agent then sees, in context:
 #   The user's @reviewer mention was dispatched to the "reviewer" agent
-#   (model deepseek-chat). The agent's reply:
+#   (google/gemini-3-flash-preview). The agent's reply:
 #   ...
 ```
 
@@ -70,7 +73,7 @@ The plugin row accepts the usual cordis config keys (set them in your profile's 
 
 - **First mention wins.** A message naming several agents dispatches only the first (longest-name-first) match; the rest of the message still goes to it as the task. Pick one agent per message for now.
 - **Strict `{{…}}` persona rule.** The agent body is used as the child's persona, where `{{name}}` is a strict prompt-variable reference. A file whose body contains a complete `{{...}}` group is skipped at load with a logged reason — a lone `{{` without a later `}}` is fine. This matches dsh's own deployment-persona semantics.
-- **Only `description` and `model` in frontmatter.** opencode's `temperature`, `mode`, and `tools` fields are not honored (dsh's subagent request has no temperature channel, and tool scoping is a separate capability).
+- **Only `description`, `provider`, and `model` in frontmatter.** opencode's `temperature`, `mode`, and `tools` fields are not honored (dsh's subagent request has no temperature channel, and tool scoping is a separate capability).
 - **No live reload.** Agent files are read at plugin load; editing them requires restarting the profile (HMR of the plugin fiber re-reads them).
 - **Mention boundary is name characters only.** `@types/react` matches an agent literally named `types` — pick distinctive names.
 
