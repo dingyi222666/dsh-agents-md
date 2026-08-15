@@ -1,6 +1,6 @@
-# dsh-agent-book
+# dsh-agents-md
 
-[![npm version](https://img.shields.io/npm/v/@dingyi222666/dsh-agent-book.svg)](https://www.npmjs.com/package/@dingyi222666/dsh-agent-book)
+[![npm version](https://img.shields.io/npm/v/@dingyi222666/dsh-agents-md.svg)](https://www.npmjs.com/package/@dingyi222666/dsh-agents-md)
 
 English | [中文](README.zh.md)
 
@@ -40,7 +40,7 @@ Then type `@reviewer <your request>` in any conversation:
 
 ```sh
 # Install from npm (requires dsh >= 0.1.0-rc.6)
-dsh plugin --profile web add @dingyi222666/dsh-agent-book
+dsh plugin --profile web add @dingyi222666/dsh-agents-md
 # Restart dsh web; the '@' agent source mounts automatically
 dsh web
 ```
@@ -52,14 +52,14 @@ Notes:
 
 ## Configuration
 
-The plugin row accepts the usual cordis config keys (set them in your profile's `cordis.patch.yml` under the `dsh-agent-book` row's `config`, or with `!!js` expressions where needed):
+The plugin row accepts the usual cordis config keys (set them in your profile's `cordis.patch.yml` under the `dsh-agents-md` row's `config`, or with `!!js` expressions where needed):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `agentsDir` | `~/.dsh/agents` | Directory holding one `*.md` agent definition per file |
 | `provider` | `spawn` | Subagent provider name; must support the `persona` capability |
 | `maxDepth` | `3` | Absolute delegation-depth cap for dispatched agents (`0` forbids dispatch) |
-| `rosterPath` | `/dsh-agent-book/agents.json` | HTTP path of the browser roster endpoint |
+| `rosterPath` | `/dsh-agents-md/agents.json` | HTTP path of the browser roster endpoint |
 
 ## Model Experience
 

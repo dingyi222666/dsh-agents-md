@@ -104,7 +104,7 @@ describe('loadAgentsDir', () => {
   })
 
   async function withDir(files: Record<string, string>): Promise<string> {
-    dir = await mkdtemp(join(tmpdir(), 'agent-book-'))
+    dir = await mkdtemp(join(tmpdir(), 'agents-md-'))
     for (const [name, text] of Object.entries(files)) {
       await writeFile(join(dir, name), text)
     }
@@ -140,7 +140,7 @@ describe('loadAgentsDir', () => {
   })
 
   it('treats a missing directory as an empty roster', async () => {
-    const result = await loadAgentsDir(join(tmpdir(), 'agent-book-missing-' + Math.random()))
+    const result = await loadAgentsDir(join(tmpdir(), 'agents-md-missing-' + Math.random()))
     expect(result).toEqual({ agents: [], skipped: [] })
   })
 })

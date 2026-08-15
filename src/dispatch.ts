@@ -4,7 +4,7 @@
  * route, on the configured provider. The tool layer calls this and maps a
  * failed run to an isError tool result.
  *
- * @module @dingyi222666/dsh-agent-book/dispatch
+ * @module @dingyi222666/dsh-agents-md/dispatch
  */
 
 import type { Context } from '@deepseek-ai/cordis'

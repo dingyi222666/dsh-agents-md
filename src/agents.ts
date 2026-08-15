@@ -4,7 +4,7 @@
  * the body becomes the agent's system prompt (the per-child persona the
  * dispatched subagent runs under).
  *
- * @module @dingyi222666/dsh-agent-book/agents
+ * @module @dingyi222666/dsh-agents-md/agents
  */
 
 import { readdir, readFile } from 'node:fs/promises'

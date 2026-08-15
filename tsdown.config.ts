@@ -1,5 +1,5 @@
 /**
- * Standalone tsdown config for the dsh-agent-book external plugin — the
+ * Standalone tsdown config for the dsh-agents-md external plugin — the
  * browser-half counterpart of the in-repo clientBundle preset, kept
  * self-contained so this package builds outside the dsh workspace.
  *
@@ -17,7 +17,7 @@
  */
 import type { UserConfig } from 'tsdown'
 
-const PLUGIN_ID = '@dingyi222666/dsh-agent-book'
+const PLUGIN_ID = '@dingyi222666/dsh-agents-md'
 
 /** The browser platform seed modules the shell shares into the frozen module table. */
 const PLATFORM_MODULES = [

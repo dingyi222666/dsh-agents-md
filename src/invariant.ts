@@ -1,6 +1,6 @@
 /**
- * Package-owned invariant companion for `dsh-agent-book`.
- * @module @dingyi222666/dsh-agent-book/invariant
+ * Package-owned invariant companion for `dsh-agents-md`.
+ * @module @dingyi222666/dsh-agents-md/invariant
  */
 
 /* jscpd:ignore-start */
@@ -9,10 +9,10 @@ import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 // Type-only: pulls the invariants package's cordis Context merge (ctx.invariants).
 import type {} from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = 'dsh-agent-book'
+const PACKAGE_NAME = 'dsh-agents-md'
 
 /** Cordis companion plugin name. */
-export const name = 'dsh-agent-book-invariant'
+export const name = 'dsh-agents-md-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 

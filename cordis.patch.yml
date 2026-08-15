@@ -1,9 +1,9 @@
-# The dsh-agent-book bundle patch: one browser plugin row added to the web
+# The dsh-agents-md bundle patch: one browser plugin row added to the web
 # profile composition. The row joins the dshClient roster, so the modules node
 # half serves lib/client.js into the boot graph and the browser gains the '@'
 # agent reference source. The node half (lib/index.js) is loaded by the bundle
 # row itself once the full package name appears in the profile's
 # `dsh.profile.bundles` list.
 - insert:
-    - id: dsh-agent-book
-      name: '@dingyi222666/dsh-agent-book'
+    - id: dsh-agents-md
+      name: '@dingyi222666/dsh-agents-md'

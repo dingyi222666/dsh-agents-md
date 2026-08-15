@@ -1,5 +1,5 @@
 {
-  "name": "@dingyi222666/dsh-agent-book",
+  "name": "@dingyi222666/dsh-agents-md",
   "version": "0.1.0",
   "description": "opencode-style custom agents for dsh: define agents as markdown files with their own system prompt and model, then call them from chat with an @mention — each mention dispatches a subagent",
   "type": "module",

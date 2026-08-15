@@ -1,12 +1,12 @@
 /**
- * dsh-agent-book: opencode-style custom agents for dsh. The node half loads
+ * dsh-agents-md: opencode-style custom agents for dsh. The node half loads
  * one agent per markdown file (YAML frontmatter + body), registers a
  * `call_agent` tool the main model uses to run a named agent as a subagent
  * (the child runs under the agent's own system prompt and provider/model
  * route, with the parent's tool set), publishes the roster for the browser
  * half, and tells the model who is available.
  *
- * @module @dingyi222666/dsh-agent-book
+ * @module @dingyi222666/dsh-agents-md
  */
 
 import { homedir } from 'node:os'
@@ -26,7 +26,7 @@ import { dispatchAgent } from './dispatch.ts'
 import { stripMentions } from './mention.ts'
 
 /** Browser roster endpoint, mirrored by the client half's ROSTER_PATH. */
-export const DEFAULT_ROSTER_PATH = '/dsh-agent-book/agents.json'
+export const DEFAULT_ROSTER_PATH = '/dsh-agents-md/agents.json'
 
 /** Default agents directory: one `*.md` agent definition per file. */
 export function defaultAgentsDir(): string {
@@ -41,7 +41,7 @@ export interface Config {
   provider?: string
   /** Absolute delegation-depth cap for dispatched agents (default `3`; `0` forbids dispatch). */
   maxDepth?: number
-  /** HTTP path of the browser roster endpoint (default `/dsh-agent-book/agents.json`). */
+  /** HTTP path of the browser roster endpoint (default `/dsh-agents-md/agents.json`). */
   rosterPath?: string
 }
 
@@ -52,7 +52,7 @@ export const Config: z<Config> = z.object({
   rosterPath: z.string().default(DEFAULT_ROSTER_PATH),
 })
 
-export const name = 'dsh-agent-book'
+export const name = 'dsh-agents-md'
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
 /** Prompt order of the agent roster section: after the persona, before tool guidance. */
@@ -117,11 +117,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const { agents: initial, skipped } = await loadAgentsDir(agentsDir)
   applyLoad(initial)
   for (const entry of skipped) {
-    ctx.logger.warn(`dsh-agent-book: skipped agent file "${entry.file}": ${entry.reason}`)
+    ctx.logger.warn(`dsh-agents-md: skipped agent file "${entry.file}": ${entry.reason}`)
   }
 
   ctx.systemPrompt.section({
-    name: 'agent-book:roster',
+    name: 'agents-md:roster',
     order: ROSTER_SECTION_ORDER,
     text: () => rosterSectionText(agents),
   })
@@ -183,7 +183,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const reloadAgents = async (): Promise<void> => {
     const { agents: next, skipped: reloadSkipped } = await loadAgentsDir(agentsDir)
     for (const entry of reloadSkipped) {
-      ctx.logger.warn(`dsh-agent-book: skipped agent file "${entry.file}": ${entry.reason}`)
+      ctx.logger.warn(`dsh-agents-md: skipped agent file "${entry.file}": ${entry.reason}`)
     }
     const namesChanged = next.map(agent => agent.name).join('\n') !== agents.map(agent => agent.name).join('\n')
     applyLoad(next)
@@ -199,13 +199,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     // the reload path already degrades to an empty roster.
     watcher.on('error', () => {})
   } catch {
-    ctx.logger.info(`dsh-agent-book: agents directory ${agentsDir} does not exist yet; no live reload (create it and restart, or edit agents after boot)`)
+    ctx.logger.info(`dsh-agents-md: agents directory ${agentsDir} does not exist yet; no live reload (create it and restart, or edit agents after boot)`)
   }
   ctx.effect(() => () => {
     clearTimeout(reloadTimer)
     watcher?.close()
     toolDisposer?.()
-  }, 'dsh-agent-book: agents watcher and tool')
+  }, 'dsh-agents-md: agents watcher and tool')
 
   // The browser '@' source fetches the roster from this endpoint; without the
   // webserver (headless profiles) the node half simply skips the route.
@@ -227,6 +227,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         res.end(JSON.stringify(agents.map(toRosterEntry)))
       },
     }
-    ctx.effect(() => webServer.register(route), 'dsh-agent-book: roster route')
+    ctx.effect(() => webServer.register(route), 'dsh-agents-md: roster route')
   }
 }

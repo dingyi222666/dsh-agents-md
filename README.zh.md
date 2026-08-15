@@ -1,6 +1,6 @@
-# dsh-agent-book
+# dsh-agents-md
 
-[![npm version](https://img.shields.io/npm/v/@dingyi222666/dsh-agent-book.svg)](https://www.npmjs.com/package/@dingyi222666/dsh-agent-book)
+[![npm version](https://img.shields.io/npm/v/@dingyi222666/dsh-agents-md.svg)](https://www.npmjs.com/package/@dingyi222666/dsh-agents-md)
 
 [English](README.md) | 中文
 
@@ -39,7 +39,7 @@ model: gemini-3-flash-preview
 
 ```sh
 # 从 npm 安装（需要 dsh >= 0.1.0-rc.6）
-dsh plugin --profile web add @dingyi222666/dsh-agent-book
+dsh plugin --profile web add @dingyi222666/dsh-agents-md
 # 重启 dsh web，'@' agent 引用源会自动挂载
 dsh web
 ```
@@ -51,14 +51,14 @@ dsh web
 
 ## 配置
 
-插件行接受常规的 cordis 配置键（在 profile 的 `cordis.patch.yml` 里 `dsh-agent-book` 行的 `config` 下设置，需要表达式时用 `!!js`）：
+插件行接受常规的 cordis 配置键（在 profile 的 `cordis.patch.yml` 里 `dsh-agents-md` 行的 `config` 下设置，需要表达式时用 `!!js`）：
 
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentsDir` | `~/.dsh/agents` | 存放 agent 定义（每个文件一个 `*.md`）的目录 |
 | `provider` | `spawn` | subagent provider 名；必须支持 `persona` 能力 |
 | `maxDepth` | `3` | 派发的 agent 的绝对委派深度上限（`0` 禁止派发） |
-| `rosterPath` | `/dsh-agent-book/agents.json` | 浏览器 roster 端点的 HTTP 路径 |
+| `rosterPath` | `/dsh-agents-md/agents.json` | 浏览器 roster 端点的 HTTP 路径 |
 
 ## 模型体验
 

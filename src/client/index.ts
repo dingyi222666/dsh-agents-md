@@ -21,8 +21,8 @@ import { en, NS, zh, type AgentBookKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** The agent-book '@' reference source copy. */
-    'agent-book': AgentBookKey
+    /** The agents-md '@' reference source copy. */
+    'agents-md': AgentBookKey
   }
 }
 
@@ -32,7 +32,7 @@ export type { AgentBookKey } from './locales.ts'
 export const inject = ['inputTriggers', 'locale']
 
 /** The host roster endpoint, mirrored from the node half's `DEFAULT_ROSTER_PATH`. */
-export const ROSTER_PATH = '/dsh-agent-book/agents.json'
+export const ROSTER_PATH = '/dsh-agents-md/agents.json'
 
 /** One roster entry as served by the host. */
 export interface AgentSummary {
@@ -89,7 +89,7 @@ class AgentRoster {
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-agent-book: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-agents-md: dictionaries')
   const roster = new AgentRoster()
   const source: InputTriggerSource = {
     trigger: '@',
@@ -121,5 +121,5 @@ export function apply(ctx: ClientContext): void {
       serialize: ref => Promise.resolve(`@${ref}`),
     },
   }
-  ctx.effect(() => ctx.inputTriggers.registerSource(source), 'dsh-agent-book: @ source')
+  ctx.effect(() => ctx.inputTriggers.registerSource(source), 'dsh-agents-md: @ source')
 }

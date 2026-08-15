@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * dsh-agent-book browser half: source registration (duplicate-name proof) +
+ * dsh-agents-md browser half: source registration (duplicate-name proof) +
  * fiber-teardown removal (HMR safety) against a fake trigger pipeline, then
  * the source behavior contract driven directly on the captured source: the
  * roster fetch (candidates filter, lexicon warm-up notification, failure

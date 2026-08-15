@@ -44,7 +44,7 @@ interface Bench {
 }
 
 async function bench(config: Record<string, unknown> = {}): Promise<Bench> {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-book-apply-'))
+  const dir = await mkdtemp(join(tmpdir(), 'agents-md-apply-'))
   await writeFile(join(dir, 'reviewer.md'), VALID)
   await writeFile(join(dir, 'broken.md'), 'no frontmatter')
   const ctx = new Context()
@@ -171,7 +171,7 @@ describe('apply', () => {
   })
 
   it('maps a failed child run to a tool error carrying the partial output', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'agent-book-fail-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agents-md-fail-'))
     await writeFile(join(dir, 'reviewer.md'), VALID)
     const ctx = new Context()
     let tool: Bench['tool']
@@ -194,7 +194,7 @@ describe('apply', () => {
   it('registers a roster section that lists the loaded agents with their route', async () => {
     const b = await bench()
     current = b
-    const section = b.sections.find(entry => entry.name === 'agent-book:roster')
+    const section = b.sections.find(entry => entry.name === 'agents-md:roster')
     expect(section).toBeDefined()
     expect(section!.order).toBe(95)
     expect(section!.text()).toContain('@reviewer — Reviews code for bugs (google/gemini-3-flash-preview)')
@@ -219,7 +219,7 @@ describe('apply', () => {
   })
 
   it('registers no tool and an empty roster section without agents, and still boots without a webserver', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'agent-book-empty-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agents-md-empty-'))
     const ctx = new Context()
     let registered = 0
     ctx.provide('tools', { register: () => { registered += 1; return () => {} } })
@@ -252,7 +252,7 @@ describe('apply', () => {
   it('live-reloads edited definitions into the roster section and dispatch', async () => {
     const b = await bench()
     current = b
-    const section = b.sections.find(entry => entry.name === 'agent-book:roster')!
+    const section = b.sections.find(entry => entry.name === 'agents-md:roster')!
     expect(section.text()).toContain('Reviews code for bugs')
     await writeFile(join(b.dir, 'reviewer.md'), `---
 description: Reviews code AND security

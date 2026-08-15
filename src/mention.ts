@@ -4,7 +4,7 @@
  * agent `review` and `@types/react` never matches the agent `types` (the
  * boundary rule treats `-`, `_`, and ASCII alphanumerics as name characters).
  *
- * @module @dingyi222666/dsh-agent-book/mention
+ * @module @dingyi222666/dsh-agents-md/mention
  */
 
 import type { AgentDefinition } from './agents.ts'

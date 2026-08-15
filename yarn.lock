@@ -825,9 +825,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@dingyi222666/dsh-agent-book@workspace:.":
+"@dingyi222666/dsh-agents-md@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@dingyi222666/dsh-agent-book@workspace:."
+  resolution: "@dingyi222666/dsh-agents-md@workspace:."
   dependencies:
     "@deepseek-ai/cordis": "npm:^4.0.1"
     "@deepseek-ai/dsh-agent": "npm:^0.1.0-rc.6"
